@@ -10,35 +10,42 @@ app.use(express.json({ limit: "50mb" })); // allow big base64 payloads
 
 app.post("/edit-image", async (req, res) => {
   try {
-    const { imageBase64, prompt, size } = req.body;
+    const { imageBase64, productBase64, prompt, size } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: "imageBase64 is required" });
     }
 
-    // Extract MIME type if present (e.g. data:image/png;base64,...)
-    let mimeType = "image/png";
-    let base64Data = imageBase64;
+    // --- helper to strip base64 prefix and convert to buffer ---
+    function base64ToBuffer(base64Str, fallbackMime = "image/png") {
+      let mimeType = fallbackMime;
+      let rawBase64 = base64Str;
 
-    const match = imageBase64.match(/^data:(.+);base64,(.*)$/);
-    if (match) {
-      mimeType = match[1]; // e.g. image/jpeg, image/png, image/webp
-      base64Data = match[2]; // strip "data:...base64," prefix
+      const match = base64Str.match(/^data:(.+);base64,(.*)$/);
+      if (match) {
+        mimeType = match[1]; // e.g. image/jpeg, image/png
+        rawBase64 = match[2];
+      }
+      return { buffer: Buffer.from(rawBase64, "base64"), mimeType };
     }
 
-    // Convert base64 string to Buffer
-    const buffer = Buffer.from(base64Data, "base64");
+    // Convert main image
+    const { buffer: mainBuffer, mimeType: mainMime } = base64ToBuffer(imageBase64);
 
     // Build multipart form-data
     const formData = new FormData();
     formData.append("model", "gpt-image-1");
-    formData.append("image", buffer, `image.${mimeType}`);
+    formData.append("image", mainBuffer, `image.${mainMime.split("/")[1]}`);
     formData.append("prompt", prompt || "Edit this image");
-    formData.append("size", size || "1024x1536");
+    formData.append("size", size || "1024x1792");
 
-    console.log({formData})
-    // return
-    // Send to OpenAI API using axios
+    // If productBase64 provided, add it as a mask or secondary image
+    if (productBase64) {
+      const { buffer: productBuffer, mimeType: productMime } = base64ToBuffer(productBase64);
+      formData.append("image", productBuffer, `product.${productMime.split("/")[1]}`);
+    }
+
+    // Send to OpenAI API
     const response = await axios.post(
       "https://api.openai.com/v1/images/edits",
       formData,
@@ -54,9 +61,7 @@ app.post("/edit-image", async (req, res) => {
     res.json(response.data);
   } catch (err) {
     console.error("Error editing image:", err.response?.data || err.message);
-    res
-      .status(500)
-      .json({ error: err.response?.data || err.message });
+    res.status(500).json({ error: err.response?.data || err.message });
   }
 });
 

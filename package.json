@@ -8,7 +8,7 @@
   "main": "script.js",
   "scripts": {
     "test": "",
-    "start": "node script.js"
+    "start": "pm2 start script.js --name image-gen"
   },
   "dependencies": {
     "express": "^4.18.2",
