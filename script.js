@@ -71,19 +71,20 @@ app.post("/erase-image", async (req, res) => {
     formData.append("mask", maskBuffer, `mask.${maskMime.split("/")[1]}`);
     formData.append("prompt", prompt || "Erase the text and fill with background");
     formData.append("size", size || "1024x1024");
+    formData.append("response_format", "b64_json");
 
-    const response = await axios.post(
-      "https://api.openai.com/v1/images/edits",
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-      }
-    );
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, // 👈 your key
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
 
     res.json({
-      imageBase64: `data:image/png;base64,${response.data.data[0].b64_json}`,
+      imageBase64: `data:image/png;base64,${data.data[0].b64_json}`,
     });
   } catch (error) {
     console.error("OpenAI Image Edits error:", error.response?.data || error.message);
