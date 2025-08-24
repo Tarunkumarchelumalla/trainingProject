@@ -64,6 +64,44 @@ app.post("/edit-image", async (req, res) => {
   }
 });
 
+app.post('/erase-image', async (req, res) => {
+  try {
+    const formData = new FormData();
+
+    // Convert base64 → Blob
+    const imageBlob = await fetch(req.imageBase64).then(res => res.blob());
+    const maskBlob = await fetch(req.maskBase64).then(res => res.blob());
+
+    formData.append("image", imageBlob, "image.png");
+    formData.append("mask", maskBlob, "mask.png");
+    formData.append("prompt", req.prompt);
+    formData.append("size", req.size || "1024x1024");
+    formData.append("response_format", "b64_json"); 
+
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, // 👈 your key
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API request failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.data || result.data.length === 0 ||  !result.data[0].b64_json) {
+      throw new Error("Invalid response from OpenAI Image Edits API");
+    }
+
+    return `data:image/png;base64,${result.data[0].b64_json}`;
+  } catch (error) {
+    console.error("OpenAI Image Edits error:", error);
+    throw new Error("Failed to edit image. Please try again.");
+  }
+})
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
