@@ -17,17 +17,6 @@ app.post("/edit-image", async (req, res) => {
     }
 
     // --- Helper function to parse base64 ---
-    const parseBase64 = (b64, defaultMime = "image/png") => {
-      let mimeType = defaultMime;
-      let base64Data = b64;
-
-      const match = b64.match(/^data:(.+);base64,(.*)$/);
-      if (match) {
-        mimeType = match[1];
-        base64Data = match[2];
-      }
-      return { buffer: Buffer.from(base64Data, "base64"), mimeType };
-    };
 
     // Convert main image
     const { buffer: imageBuffer, mimeType: imageMime } = parseBase64(imageBase64);
@@ -64,44 +53,58 @@ app.post("/edit-image", async (req, res) => {
   }
 });
 
-app.post('/erase-image', async (req, res) => {
+app.post("/erase-image", async (req, res) => {
   try {
+    console.log(req.body)
+    const { imageBase64, maskBase64, size, prompt } = req.body;
+
+    if (!imageBase64 || !maskBase64) {
+      return res.status(400).json({ error: "imageBase64 and maskBase64 are required" });
+    }
+
+    const { buffer: imageBuffer, mimeType: imageMime } = parseBase64(imageBase64);
+    const { buffer: maskBuffer, mimeType: maskMime } = parseBase64(maskBase64);
+
     const formData = new FormData();
+    formData.append("model", "gpt-image-1");
+    formData.append("image", imageBuffer, `image.${imageMime.split("/")[1]}`);
+    formData.append("mask", maskBuffer, `mask.${maskMime.split("/")[1]}`);
+    formData.append("prompt", prompt || "Erase the text and fill with background");
+    formData.append("size", size || "1024x1024");
+    formData.append("response_format", "b64_json");
 
-    // Convert base64 → Blob
-    const imageBlob = await fetch(req.imageBase64).then(res => res.blob());
-    const maskBlob = await fetch(req.maskBase64).then(res => res.blob());
+    const response = await axios.post(
+      "https://api.openai.com/v1/images/edits",
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...formData.getHeaders(),
+        },
+      }
+    );
 
-    formData.append("image", imageBlob, "image.png");
-    formData.append("mask", maskBlob, "mask.png");
-    formData.append("prompt", req.prompt);
-    formData.append("size", req.size || "1024x1024");
-    formData.append("response_format", "b64_json"); 
-
-    const response = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, // 👈 your key
-      },
-      body: formData,
+    res.json({
+      imageBase64: `data:image/png;base64,${response.data.data[0].b64_json}`,
     });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API request failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.data || result.data.length === 0 ||  !result.data[0].b64_json) {
-      throw new Error("Invalid response from OpenAI Image Edits API");
-    }
-
-    return `data:image/png;base64,${result.data[0].b64_json}`;
   } catch (error) {
-    console.error("OpenAI Image Edits error:", error);
-    throw new Error("Failed to edit image. Please try again.");
+    console.error("OpenAI Image Edits error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data || error.message });
   }
-})
+});
+
+const parseBase64 = (b64, defaultMime = "image/png") => {
+  let mimeType = defaultMime;
+  let base64Data = b64;
+
+  const match = b64.match(/^data:(.+);base64,(.*)$/);
+  if (match) {
+    mimeType = match[1];
+    base64Data = match[2];
+  }
+  return { buffer: Buffer.from(base64Data, "base64"), mimeType };
+};
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
