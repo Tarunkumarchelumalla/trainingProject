@@ -66,11 +66,10 @@ app.post("/erase-image", async (req, res) => {
     const { buffer: maskBuffer, mimeType: maskMime } = parseBase64(maskBase64);
 
     const formData = new FormData();
-    formData.append("model", "gpt-image-1");
-    formData.append("image", imageBuffer, `image.${imageMime.split("/")[1]}`);
-    formData.append("mask", maskBuffer, `mask.${maskMime.split("/")[1]}`);
-    formData.append("prompt", prompt || "Erase the text and fill with background");
-    formData.append("size", size || "1024x1024");
+    formData.append("image", imageBuffer, "image.png");
+    formData.append("mask", maskBuffer, "mask.png");
+    formData.append("prompt", prompt);
+    formData.append("size", size);
     formData.append("response_format", "b64_json");
 
     const response = await fetch("https://api.openai.com/v1/images/edits", {
