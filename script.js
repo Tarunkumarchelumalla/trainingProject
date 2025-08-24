@@ -79,6 +79,10 @@ app.post("/erase-image", async (req, res) => {
       },
       body: formData,
     });
+    
+    if (!response.ok) {
+      throw new Error(`OpenAI API request failed: ${response.status}`);
+    }
 
     const data = await response.json();
 
