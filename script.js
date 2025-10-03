@@ -108,5 +108,69 @@ const parseBase64 = (b64, defaultMime = "image/png") => {
 };
 
 
+
+app.post("/adkrity-text-heavy", async (req, res) => {
+  try {
+    const inputPayload = req.body;
+
+    // Convert product images
+    const productImagesBase64 = await Promise.all(
+      (inputPayload.productImages || []).map(async (img) => {
+        return await urlToBase64(img.url, img.mime);
+      })
+    );
+
+    // Convert logo
+    let logoBase64 = "";
+    if (inputPayload.logo_url && inputPayload.logo_mime) {
+      logoBase64 = await urlToBase64(
+        inputPayload.logo_url,
+        inputPayload.logo_mime
+      );
+    }
+
+    // Build new payload
+    const newPayload = {
+      category: inputPayload.category, // static mapping
+      phone_number: inputPayload.phone_number || "",
+      address: inputPayload.address || "",
+      highlight_area:inputPayload.highlight_area || "",
+      website: inputPayload.website,
+      design_req:inputPayload.design_req,
+      logo_url: logoBase64 || "",
+      product_images: productImagesBase64 || [],
+    };
+
+    // Send to N8N webhook
+    const response = await fetch(
+      "https://n8n.cinqa.space/webhook/7cfd8f0f-2d73-4ca8-8c1d-99cb4812b46b",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newPayload),
+      }
+    );
+
+    const result = await response.text();
+    console.log("✅ Sent to N8N:", result);
+
+    res.json({
+      status: "success",
+      forwardedPayload: newPayload,
+      response: result,
+    });
+  } catch (err) {
+    console.error("❌ Error in /adkrity-text-heavy:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function urlToBase64(url, mime) {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString("base64");
+  return `data:${mime};base64,${base64}`;
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
