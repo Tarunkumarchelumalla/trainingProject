@@ -112,7 +112,6 @@ const parseBase64 = (b64, defaultMime = "image/png") => {
 app.post("/adkrity-text-heavy", async (req, res) => {
   try {
     const inputPayload = req.body;
-
     // Convert product images
     const productImagesBase64 = await Promise.all(
       (inputPayload.productImages || []).map(async (img) => {
@@ -131,37 +130,41 @@ app.post("/adkrity-text-heavy", async (req, res) => {
 
     // Build new payload
     const newPayload = {
-      category: inputPayload.category, // static mapping
+      category: inputPayload.category,
       phone_number: inputPayload.phone_number || "",
       address: inputPayload.address || "",
-      highlight_area:inputPayload.highlight_area || "",
+      highlight_area: inputPayload.highlight_area || "",
       website: inputPayload.website,
-      design_req:inputPayload.design_req,
+      design_req: inputPayload.design_req,
       logo_url: logoBase64 || "",
       product_images: productImagesBase64 || [],
     };
 
-    // Send to N8N webhook
-    const response = await fetch(
+    // ✅ Send to N8N webhook and wait for full response
+    const response = await axios.post(
       "https://n8n.cinqa.space/webhook/7cfd8f0f-2d73-4ca8-8c1d-99cb4812b46b",
+      newPayload,
       {
-        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPayload),
+        timeout: 60000, // 60s timeout to avoid infinite hang
       }
     );
 
-    const result = await response.text();
-    console.log("✅ Sent to N8N:", result);
+    console.log("📡 N8N Status:", response.status);
+    console.log("📡 N8N Headers:", response.headers);
+    console.log("✅ N8N Response Data:", response.data);
 
     res.json({
       status: "success",
       forwardedPayload: newPayload,
-      response: result,
+      response: response.data,
     });
   } catch (err) {
-    console.error("❌ Error in /adkrity-text-heavy:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error(
+      "❌ Error in /adkrity-text-heavy:",
+      err.response?.data || err.message
+    );
+    res.status(500).json({ error: err.response?.data || err.message });
   }
 });
 
